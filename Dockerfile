@@ -1,11 +1,29 @@
-FROM golang:1.23
+# Используем официальный образ Golang
+FROM golang:1.22 AS builder
+
+# Устанавливаем рабочую директорию внутри контейнера
+WORKDIR /app
+
+# Копируем go.mod и go.sum и устанавливаем зависимости (это ускоряет сборку)
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Копируем все исходники в контейнер
+COPY . .
+
+# Собираем бинарный файл
+RUN go build -o frappuccino ./cmd/main.go
+
+# Используем минимальный образ для финального контейнера
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
-COPY . .
+# Копируем бинарник из builder-контейнера
+COPY --from=builder /app/frappuccino /app/frappuccino
 
-RUN go build -o main .
-
+# Открываем порт
 EXPOSE 8080
 
-CMD ["./main"]
+# Запускаем приложение
+CMD ["/app/frappuccino"]
