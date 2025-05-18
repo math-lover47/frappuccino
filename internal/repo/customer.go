@@ -9,10 +9,10 @@ import (
 )
 
 type CustomerRepoIfc interface {
-	Create(ctx context.Context, customer models.Customer) (models.Customer, error)
+	Create(ctx context.Context, customer *models.Customer) (*models.Customer, error)
 	GetAll(ctx context.Context) ([]models.Customer, error)
 	GetByID(ctx context.Context, customerId string) (models.Customer, error)
-	UpdateById(ctx context.Context, customer models.Customer) error
+	UpdateById(ctx context.Context, customer *models.Customer) error
 	DeleteById(ctx context.Context, customerId string) error
 	GetByFullNameAndPhone(ctx context.Context, fullname string, phonenumber string) (string, error)
 }
@@ -25,17 +25,17 @@ func NewCustomerRepo(db *sql.DB) *CustomerRepo {
 	return &CustomerRepo{db: db}
 }
 
-func (cr *CustomerRepo) Create(ctx context.Context, customer models.Customer) (models.Customer, error) {
+func (cr *CustomerRepo) Create(ctx context.Context, customer *models.Customer) (*models.Customer, error) {
 	tx, err := cr.db.BeginTx(ctx, nil)
 	if err != nil {
-		return models.Customer{}, err
+		return nil, err
 	}
 	defer tx.Rollback()
 
 	err = cr.db.QueryRowContext(ctx,
-		`INSERT INTO customers (full_name,phone_number,email,preferences)
-	     VALUES ($1,$2,$3,$4)
-		 RETURNING customer_id,created_at,updateByIdd_at`,
+		`INSERT INTO customers (full_name, phone_number, email, preferences)
+	     VALUES ($1, $2, $3, $4)
+		 RETURNING customer_id, created_at, updated_at`,
 		customer.FullName,
 		customer.PhoneNumber,
 		customer.Email,
@@ -47,7 +47,7 @@ func (cr *CustomerRepo) Create(ctx context.Context, customer models.Customer) (m
 	)
 
 	if err != nil {
-		return models.Customer{}, err
+		return nil, err
 	}
 
 	return customer, tx.Commit()
@@ -104,7 +104,7 @@ func (cr *CustomerRepo) GetByID(ctx context.Context, customerId string) (models.
 	return customer, nil
 }
 
-func (cr *CustomerRepo) UpdateById(ctx context.Context, customer models.Customer) error {
+func (cr *CustomerRepo) UpdateById(ctx context.Context, customer *models.Customer) error {
 	tx, err := cr.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -113,14 +113,13 @@ func (cr *CustomerRepo) UpdateById(ctx context.Context, customer models.Customer
 
 	res, err := tx.ExecContext(ctx,
 		`UPDATE customers 
-			SET 
-				full_name = $1,
-				phone_number =$2,
-				email =$3,
-				preferences =$4,
-				updateByIdd_at = NOW()
-			WHERE customer_id = $5
-		`,
+		 SET 
+			 full_name = $1,
+			 phone_number = $2,
+			 email = $3,
+			 preferences = $4,
+			 updated_at = NOW()
+		 WHERE customer_id = $5`,
 		customer.FullName,
 		customer.PhoneNumber,
 		customer.Email,
@@ -133,7 +132,6 @@ func (cr *CustomerRepo) UpdateById(ctx context.Context, customer models.Customer
 		} else {
 			return utils.ErrConflictFields
 		}
-		return err
 	}
 
 	rowsAffected, err := res.RowsAffected()
@@ -154,7 +152,7 @@ func (cr *CustomerRepo) DeleteById(ctx context.Context, customerId string) error
 	}
 	defer tx.Rollback()
 
-	res, err := tx.ExecContext(ctx, `DELETE FROM customer_id WHERE id= $1`, customerId)
+	res, err := tx.ExecContext(ctx, `DELETE FROM customers WHERE customer_id = $1`, customerId)
 	if err != nil {
 		return err
 	}
@@ -172,26 +170,25 @@ func (cr *CustomerRepo) DeleteById(ctx context.Context, customerId string) error
 }
 
 func (cr *CustomerRepo) GetByFullNameAndPhone(ctx context.Context, fullname string, phonenumber string) (string, error) {
-	var CustomerId string
+	var customerId string
 	err := cr.db.QueryRowContext(ctx,
 		`WITH existing AS (
-		SELECT customer_id 
-		FROM customer 
-		WHERE full_name = $1 AND phone_number = $2
+			SELECT customer_id 
+			FROM customers 
+			WHERE full_name = $1 AND phone_number = $2
 		),
 		inserted AS (
-		INSERT INTO customer (full_name, phone_number)
-		SELECT $1, $2
-		WHERE NOT EXISTS (SELECT 1 FROM existing)
-		RETURNING customer_id
+			INSERT INTO customers (full_name, phone_number) 
+			SELECT $1, $2
+			WHERE NOT EXISTS (SELECT 1 FROM existing)
+			RETURNING customer_id
 		)
 		SELECT customer_id FROM inserted
 		UNION ALL
-		SELECT customer_id FROM existing;
-	`,
+		SELECT customer_id FROM existing;`,
 		fullname,
 		phonenumber).Scan(
-		&CustomerId,
+		&customerId,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -200,5 +197,5 @@ func (cr *CustomerRepo) GetByFullNameAndPhone(ctx context.Context, fullname stri
 		return "", err
 	}
 
-	return CustomerId, nil
+	return customerId, nil
 }

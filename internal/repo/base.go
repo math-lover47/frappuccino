@@ -10,7 +10,7 @@ type Repo struct {
 	AggregationRepo AggregationRepoIfc
 }
 
-func NewRepository(db *sql.DB) *Repo {
+func New(db *sql.DB) *Repo {
 	return &Repo{
 		CustomerRepo:    NewCustomerRepo(db),
 		InventoryRepo:   NewInventoryRepo(db),

@@ -35,12 +35,19 @@ func (mr *MenuRepo) Create(ctx context.Context, menuItem models.MenuItems) (mode
 	if err != nil {
 		return models.MenuItems{}, err
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			err = tx.Commit()
+		}
+	}()
 
+	// Вставка элемента меню
 	err = mr.db.QueryRowContext(ctx,
-		`INSERT INTO menu_items (item_name,item_description,price,categories)
-	     VALUES ($1,$2,$3,$4)
-		 RETURNING menu_item_id,created_at,updated_at`,
+		`INSERT INTO menu_items (item_name, item_description, price, categories)
+	     VALUES ($1, $2, $3, $4)
+		 RETURNING menu_item_id, created_at, updated_at`,
 		menuItem.ItemName,
 		menuItem.ItemDescription,
 		menuItem.Price,
@@ -55,7 +62,19 @@ func (mr *MenuRepo) Create(ctx context.Context, menuItem models.MenuItems) (mode
 		return models.MenuItems{}, err
 	}
 
-	return menuItem, tx.Commit()
+	for _, ingredient := range menuItem.Ingredients {
+		_, err = tx.ExecContext(ctx,
+			`INSERT INTO ingredients (menu_item_id, ingredient_name, quantity)
+			 VALUES ($1, $2, $3)`,
+			menuItem.MenuItemId, ingredient.IngredientName, ingredient.Quantity,
+		)
+		if err != nil {
+			return models.MenuItems{}, err
+		}
+	}
+
+	// Завершаем транзакцию
+	return menuItem, err
 }
 
 func (mr *MenuRepo) GetAll(ctx context.Context) ([]models.MenuItems, error) {
@@ -80,7 +99,30 @@ func (mr *MenuRepo) GetAll(ctx context.Context) ([]models.MenuItems, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		ingredientRows, err := mr.db.QueryContext(ctx,
+			`SELECT ingredient_name, quantity FROM ingredients WHERE menu_item_id = $1`, menuItem.MenuItemId)
+		if err != nil {
+			return nil, err
+		}
+		defer ingredientRows.Close()
+
+		var ingredients []models.Ingredients
+		for ingredientRows.Next() {
+			var ingredient models.Ingredients
+			err := ingredientRows.Scan(&ingredient.IngredientName, &ingredient.Quantity)
+			if err != nil {
+				return nil, err
+			}
+			ingredients = append(ingredients, ingredient)
+		}
+		menuItem.Ingredients = ingredients
+
 		menu = append(menu, menuItem)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return menu, nil
@@ -106,6 +148,27 @@ func (mr *MenuRepo) GetByID(ctx context.Context, menuItemId string) (models.Menu
 		}
 		return models.MenuItems{}, err
 	}
+
+	// Получаем ингредиенты для данного элемента меню
+	ingredientRows, err := mr.db.QueryContext(ctx,
+		`SELECT ingredient_name, quantity FROM ingredients WHERE menu_item_id = $1`, menuItemId)
+	if err != nil {
+		return models.MenuItems{}, err
+	}
+	defer ingredientRows.Close()
+
+	var ingredients []models.Ingredients
+	for ingredientRows.Next() {
+		var ingredient models.Ingredients
+		err := ingredientRows.Scan(&ingredient.IngredientName, &ingredient.Quantity)
+		if err != nil {
+			return models.MenuItems{}, err
+		}
+		ingredients = append(ingredients, ingredient)
+	}
+
+	menuItem.Ingredients = ingredients
+
 	return menuItem, nil
 }
 
@@ -116,38 +179,71 @@ func (mr *MenuRepo) UpdateByID(ctx context.Context, menuItem models.MenuItems) e
 	}
 	defer tx.Rollback()
 
+	// Обновление данных меню
 	res, err := tx.ExecContext(ctx,
 		`UPDATE menu_items
 		SET 
 			item_name = $1,
-			item_description =$2,
-			price =$3,
-			categories =$4,
+			item_description = $2,
+			price = $3,
+			categories = $4,
 			updated_at = NOW()
-		WHERE menu_item_id = $5
-	`,
+		WHERE menu_item_id = $5`,
 		menuItem.ItemName,
 		menuItem.ItemDescription,
 		menuItem.Price,
-		menuItem.Categories,
+		pq.Array(menuItem.Categories), // Если используется pq.Array для массивов
 		menuItem.MenuItemId,
 	)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return utils.ErrIdNotFound
-		} else {
-			return utils.ErrConflictFields
-		}
-		return err
+		return err // Непосредственно возвращаем ошибку
 	}
+
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
 		return err
 	}
 	if rowsAffected == 0 {
-		return utils.ErrIdNotFound
+		return utils.ErrIdNotFound // Элемент не найден
 	}
 
+	// Обновление или добавление ингредиентов в инвентаре
+	// Для этого предполагаем, что у тебя есть список ингредиентов, который нужно обновить
+	for _, ingredient := range menuItem.Ingredients {
+		// Проверяем, есть ли уже этот ингредиент в инвентаре
+		var currentQuantity int
+		err := tx.QueryRowContext(ctx,
+			`SELECT quantity FROM inventory WHERE menu_item_id = $1 AND ingredient_name = $2`,
+			menuItem.MenuItemId, ingredient.IngredientName,
+		).Scan(&currentQuantity)
+
+		// Если ингредиент существует, обновляем его количество
+		if err == nil {
+			_, err := tx.ExecContext(ctx,
+				`UPDATE inventory
+				SET quantity = $1
+				WHERE menu_item_id = $2 AND ingredient_name = $3`,
+				ingredient.Quantity, menuItem.MenuItemId, ingredient.IngredientName,
+			)
+			if err != nil {
+				return err
+			}
+		} else if err == sql.ErrNoRows {
+			// Если ингредиента нет в инвентаре, добавляем его
+			_, err := tx.ExecContext(ctx,
+				`INSERT INTO inventory (menu_item_id, ingredient_name, quantity)
+				VALUES ($1, $2, $3)`,
+				menuItem.MenuItemId, ingredient.IngredientName, ingredient.Quantity,
+			)
+			if err != nil {
+				return err
+			}
+		} else {
+			return err // Ошибка, отличная от "не найдено"
+		}
+	}
+
+	// Завершаем транзакцию
 	return tx.Commit()
 }
 

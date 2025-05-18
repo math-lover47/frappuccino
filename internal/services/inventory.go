@@ -8,11 +8,11 @@ import (
 )
 
 type InventoryServiceIfc interface {
-	Create(ctx context.Context, ingredient models.Inventory) (models.Inventory, error)
+	Create(ctx context.Context, ingredient *models.Inventory) (*models.Inventory, error)
 	GetAll(ctx context.Context) ([]models.Inventory, error)
 	GetByID(ctx context.Context, ingredientId string) (models.Inventory, error)
-	UpdateByID(ctx context.Context, ingredient models.Inventory) error
-	DeleteByID(ctx context.Context, ingerdientID string) error
+	UpdateByID(ctx context.Context, ingerdientId *models.Inventory) error
+	DeleteByID(ctx context.Context, ingerdientId string) error
 	CreateTransaction(ctx context.Context, inventoryItem *models.Inventory, istatus string) error
 	GetLeftOvers(ctx context.Context, pagenum int, pagesize int) (models.Page, error)
 }
@@ -25,12 +25,12 @@ func NewInventoryService(inventoryRepo repo.InventoryRepoIfc) *InventoryService 
 	return &InventoryService{inventoryRepo: inventoryRepo}
 }
 
-func (is *InventoryService) Create(ctx context.Context, ingredient models.Inventory) (models.Inventory, error) {
+func (is *InventoryService) Create(ctx context.Context, ingredient *models.Inventory) (*models.Inventory, error) {
 	if ingredient.Quantity < 0 {
-		return models.Inventory{}, utils.ErrInvalidQuantity
+		return nil, utils.ErrInvalidQuantity
 	}
 	if ingredient.ReorderLevel < 0 {
-		return models.Inventory{}, utils.ErrInvalidReorderLevel
+		return nil, utils.ErrInvalidReorderLevel
 	}
 
 	return is.inventoryRepo.Create(ctx, ingredient)
@@ -47,7 +47,7 @@ func (is *InventoryService) GetByID(ctx context.Context, IngredientId string) (m
 	return is.inventoryRepo.GetByID(ctx, IngredientId)
 }
 
-func (is *InventoryService) UpdateByID(ctx context.Context, ingredient models.Inventory) error {
+func (is *InventoryService) UpdateByID(ctx context.Context, ingredient *models.Inventory) error {
 	if ingredient.IngredientId == "" {
 		return utils.ErrInvalidIngredientId
 	}

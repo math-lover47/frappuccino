@@ -24,6 +24,7 @@ type Orders struct {
 	TotalPrice          utils.DEC  `json:"total_price"`
 	OrderStatus         utils.TEXT `json:"order_status"`
 	PaymentMethod       utils.TEXT `json:"payment_method"`
+	OrderItems          []OrderItems
 	CreatedAt           utils.TIME `json:"created_at"`
 	UpdatedAt           utils.TIME `json:"updated_at"`
 }
@@ -36,7 +37,6 @@ type OrderItems struct {
 	ItemName       utils.TEXT  `json:"item_name"`
 	Quantity       utils.DEC   `json:"quantity"`
 	UnitPrice      utils.DEC   `json:"unit_price"`
-	TotalPrice     utils.DEC   `json:"total_price"`
 }
 
 type OrderStatusHistory struct {

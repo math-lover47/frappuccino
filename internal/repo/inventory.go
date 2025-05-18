@@ -10,10 +10,10 @@ import (
 )
 
 type InventoryRepoIfc interface {
-	Create(ctx context.Context, ingredient models.Inventory) (models.Inventory, error)
+	Create(ctx context.Context, ingredient *models.Inventory) (*models.Inventory, error)
 	GetAll(ctx context.Context) ([]models.Inventory, error)
 	GetByID(ctx context.Context, ingredientId string) (models.Inventory, error)
-	UpdateByID(ctx context.Context, ingredient models.Inventory) error
+	UpdateByID(ctx context.Context, ingredient *models.Inventory) error
 	DeleteByID(ctx context.Context, ingerdientID string) error
 	CreateTransaction(ctx context.Context, inventoryItem *models.Inventory, status string) error
 	GetLeftOvers(ctx context.Context, pagenum int, pagesize int) (models.Page, error)
@@ -27,10 +27,10 @@ func NewInventoryRepo(db *sql.DB) *InventoryRepo {
 	return &InventoryRepo{db: db}
 }
 
-func (ir *InventoryRepo) Create(ctx context.Context, ingredient models.Inventory) (models.Inventory, error) {
+func (ir *InventoryRepo) Create(ctx context.Context, ingredient *models.Inventory) (*models.Inventory, error) {
 	tx, err := ir.db.BeginTx(ctx, nil)
 	if err != nil {
-		return models.Inventory{}, err
+		return nil, err
 	}
 	defer tx.Rollback()
 
@@ -48,7 +48,7 @@ func (ir *InventoryRepo) Create(ctx context.Context, ingredient models.Inventory
 		&ingredient.UpdatedAt,
 	)
 	if err != nil {
-		return models.Inventory{}, err
+		return nil, err
 	}
 
 	return ingredient, tx.Commit()
@@ -113,7 +113,6 @@ func (ir *InventoryRepo) UpdateByID(ctx context.Context, ingredient models.Inven
 		} else {
 			return utils.ErrConflictFields
 		}
-		return err
 	}
 
 	rowsAffected, err := res.RowsAffected()

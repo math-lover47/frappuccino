@@ -8,8 +8,9 @@ type MenuItems struct {
 	ItemDescription utils.TEXT    `json:"item_description"`
 	Price           utils.DEC     `json:"price"`
 	Categories      utils.TEXTARR `json:"categories"`
-	CreatedAt       utils.TIME    `json:"created_at"`
-	UpdatedAt       utils.TIME    `json:"updated_at"`
+	Ingredients     []Ingredients
+	CreatedAt       utils.TIME `json:"created_at"`
+	UpdatedAt       utils.TIME `json:"updated_at"`
 }
 
 type MenuItemsIngredients struct {

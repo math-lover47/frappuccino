@@ -8,12 +8,12 @@ import (
 )
 
 type CustomerServiceIfc interface {
-	Create(ctx context.Context, customer models.Customer) (models.Customer, error)
+	Create(ctx context.Context, customer *models.Customer) (*models.Customer, error)
 	GetAll(ctx context.Context) ([]models.Customer, error)
-	GetByID(ctx context.Context, CustomerId string) (models.Customer, error)
-	UpdateById(ctx context.Context, customer models.Customer) error
-	DeleteById(ctx context.Context, CustomerId string) error
-	GetByFullNameAndPhone(name string, phone string) (string, error)
+	GetByID(ctx context.Context, customerId string) (models.Customer, error)
+	UpdateById(ctx context.Context, customer *models.Customer) error
+	DeleteCustomerById(ctx context.Context, customerId string) error
+	GetByFullNameAndPhone(ctx context.Context, fullname string, phone string) (string, error)
 }
 
 type CustomerService struct {
@@ -24,62 +24,62 @@ func NewCustomerService(customerRepo repo.CustomerRepoIfc) *CustomerService {
 	return &CustomerService{customerRepo: customerRepo}
 }
 
-func (cs *CustomerService) Create(ctx context.Context, customer models.Customer) (models.Customer, error) {
-	log.Println("Creating new Customer item:", customer.FullName)
+func (cs *CustomerService) Create(ctx context.Context, customer *models.Customer) (*models.Customer, error) {
+	log.Println("Creating new customer:", customer.FullName)
 	created, err := cs.customerRepo.Create(ctx, customer)
 	if err != nil {
-		return models.Customer{}, err
+		return nil, err
 	}
-	log.Println("Customer item created successfully:", created.CustomerId)
+	log.Println("Customer created successfully:", created.CustomerId)
 	return created, nil
 }
 
 func (cs *CustomerService) GetAll(ctx context.Context) ([]models.Customer, error) {
-	log.Println("Fetching all menu items")
-	menu, err := cs.customerRepo.GetAll(ctx)
+	log.Println("Fetching all customers")
+	customers, err := cs.customerRepo.GetAll(ctx)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Retrieved %d menu items", len(menu))
-	return menu, nil
+	log.Printf("Retrieved %d customers", len(customers))
+	return customers, nil
 }
 
-func (cs *CustomerService) GetByID(ctx context.Context, CustomerId string) (models.Customer, error) {
-	log.Printf("Fetching menu item by ID: %s", CustomerId)
-	customer, err := cs.customerRepo.GetByID(ctx, CustomerId)
+func (cs *CustomerService) GetByID(ctx context.Context, customerId string) (models.Customer, error) {
+	log.Printf("Fetching customer by ID: %s", customerId)
+	customer, err := cs.customerRepo.GetByID(ctx, customerId)
 	if err != nil {
 		return models.Customer{}, err
 	}
-	log.Printf("Retrieved menu item [%s]: %s", customer.CustomerId, customer.FullName)
+	log.Printf("Retrieved customer [%s]: %s", customer.CustomerId, customer.FullName)
 	return customer, nil
 }
 
-func (cs *CustomerService) UpdateById(ctx context.Context, customer models.Customer) error {
-	log.Printf("Updating menu item [%s]", customer.CustomerId)
+func (cs *CustomerService) UpdateById(ctx context.Context, customer *models.Customer) error {
+	log.Printf("Updating customer [%s]", customer.CustomerId)
 	err := cs.customerRepo.UpdateById(ctx, customer)
 	if err != nil {
 		return err
 	}
-	log.Printf("Menu item [%s] updated successfully", customer.CustomerId)
+	log.Printf("Customer [%s] updated successfully", customer.CustomerId)
 	return nil
 }
 
-func (cs *CustomerService) DeleteByID(ctx context.Context, CustomerId string) error {
-	log.Printf("Deleting menu item [%s]", CustomerId)
-	err := cs.customerRepo.DeleteById(ctx, CustomerId)
+func (cs *CustomerService) DeleteCustomerById(ctx context.Context, customerId string) error {
+	log.Printf("Deleting customer [%s]", customerId)
+	err := cs.customerRepo.DeleteById(ctx, customerId)
 	if err != nil {
 		return err
 	}
-	log.Printf("Menu item [%s] deleted successfully", CustomerId)
+	log.Printf("Customer [%s] deleted successfully", customerId)
 	return nil
 }
 
-func (cs *CustomerService) GetCustomerByNameAndPhone(ctx context.Context, fullname string, phonenumber string) (string, error) {
-	log.Printf("Fetching menu item id by fullname and phone number: %s, %s", fullname, phonenumber)
+func (cs *CustomerService) GetByFullNameAndPhone(ctx context.Context, fullname string, phonenumber string) (string, error) {
+	log.Printf("Fetching customer ID by fullname and phone number: %s, %s", fullname, phonenumber)
 	customerId, err := cs.customerRepo.GetByFullNameAndPhone(ctx, fullname, phonenumber)
 	if err != nil {
 		return "", err
 	}
-	log.Printf("Retrieved menu item id [%s]: %s", customerId)
+	log.Printf("Retrieved customer ID [%s]", customerId)
 	return customerId, nil
 }

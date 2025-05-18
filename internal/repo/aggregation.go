@@ -3,7 +3,6 @@ package repo
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"frappuccino/models"
 )
 
@@ -22,7 +21,7 @@ func NewAggregationRepo(db *sql.DB) *AggregationRepo {
 	return &AggregationRepo{db: db}
 }
 
-func (ar *AggregationRepo) TotalSales(ctx context.Context) (float64, error) {
+func (ar *AggregationRepo) GetTotalSales(ctx context.Context) (float64, error) {
 	var totalSales float64
 
 	err := ar.db.QueryRowContext(ctx, `SELECT sum(total_price) FROM orders WHERE order_status = 'COMPLETED';`).Scan(
@@ -48,6 +47,7 @@ func (ar *AggregationRepo) GetPopularItems(ctx context.Context) (models.PopularI
 	if err != nil {
 		return models.PopularItems{}, err
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var popularItem models.PopularItem
@@ -63,19 +63,20 @@ func (ar *AggregationRepo) GetPopularItems(ctx context.Context) (models.PopularI
 }
 
 func (ar *AggregationRepo) GetSearchItems(ctx context.Context, q string, filter []string, maxPrice float64, minPrice float64) (models.Search, error) {
-	var Search models.Search
+	var search models.Search // Переименовал переменную в search
 	var err error
 	for _, val := range filter {
 		if val == "MENU" {
-			Search.MenuItems, err = ar.getMenu(ctx, q, maxPrice, minPrice)
+			search.MenuItems, err = ar.getMenu(ctx, q, maxPrice, minPrice)
 		} else if val == "ORDER" {
-			Search.OrderItems, err = ar.getOrder(ctx, q, maxPrice, minPrice)
+			search.OrderItems, err = ar.getOrder(ctx, q, maxPrice, minPrice)
 		} else if len(val) == 0 {
-			Search.OrderItems, err = ar.getOrder(ctx, q, maxPrice, minPrice)
+			// Добавил break для предотвращения дальнейших ненужных проверок.
+			search.OrderItems, err = ar.getOrder(ctx, q, maxPrice, minPrice)
 			if err != nil {
 				return models.Search{}, err
 			}
-			Search.MenuItems, err = ar.getMenu(ctx, q, maxPrice, minPrice)
+			search.MenuItems, err = ar.getMenu(ctx, q, maxPrice, minPrice)
 			if err != nil {
 				return models.Search{}, err
 			}
@@ -85,7 +86,7 @@ func (ar *AggregationRepo) GetSearchItems(ctx context.Context, q string, filter 
 			return models.Search{}, err
 		}
 	}
-	return Search, nil
+	return search, nil
 }
 
 func (ar *AggregationRepo) getOrder(ctx context.Context, q string, maxPrice float64, minPrice float64) ([]models.SearchOrder, error) {
@@ -98,16 +99,13 @@ func (ar *AggregationRepo) getOrder(ctx context.Context, q string, maxPrice floa
 	var err error
 
 	if minPrice != -1 && maxPrice != -1 {
-		fmt.Println("1")
-		query += ` AND oi.price BETWEEN $2 AND $3`
+		query += ` AND oi.unit_price BETWEEN $2 AND $3`
 		rows, err = ar.db.QueryContext(ctx, query, q, minPrice, maxPrice)
 	} else if minPrice != -1 {
-		fmt.Println("2")
-		query += ` AND oi.price >= $2`
+		query += ` AND oi.unit_price >= $2`
 		rows, err = ar.db.QueryContext(ctx, query, q, minPrice)
 	} else if maxPrice != -1 {
-		fmt.Println("3")
-		query += ` AND oi.price <= $2`
+		query += ` AND oi.unit_price <= $2`
 		rows, err = ar.db.QueryContext(ctx, query, q, maxPrice)
 	} else {
 		rows, err = ar.db.QueryContext(ctx, query, q)
@@ -137,13 +135,12 @@ func (ar *AggregationRepo) getMenu(ctx context.Context, q string, maxPrice float
 				WHERE  (item_name ILIKE  '%' || $1 || '%' OR item_description ILIKE '%' || $1 || '%')`
 	var rows *sql.Rows
 	var err error
-	fmt.Println("here 1")
+
 	if minPrice != -1 && maxPrice != -1 {
 		query += ` AND price BETWEEN $2 AND $3`
 		rows, err = ar.db.QueryContext(ctx, query, q, minPrice, maxPrice)
 	} else if minPrice != -1 {
 		query += ` AND price >= $2`
-		fmt.Println("here 2")
 		rows, err = ar.db.QueryContext(ctx, query, q, minPrice)
 	} else if maxPrice != -1 {
 		query += ` AND price <= $2`
@@ -203,6 +200,8 @@ func (ar *AggregationRepo) GetListOfOrderedItems(ctx context.Context, period str
 		if err != nil {
 			return models.ListOrderedItemByPeriods{}, err
 		}
+		defer rows.Close()
+
 		for rows.Next() {
 			var item models.OrderedItemByPeriod
 			err = rows.Scan(&item.Date, &item.Count)
@@ -236,6 +235,8 @@ func (ar *AggregationRepo) GetListOfOrderedItems(ctx context.Context, period str
 		if err != nil {
 			return models.ListOrderedItemByPeriods{}, err
 		}
+		defer rows.Close()
+
 		for rows.Next() {
 			var item models.OrderedItemByPeriod
 			err = rows.Scan(&item.Date, &item.Count)

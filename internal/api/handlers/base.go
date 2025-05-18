@@ -8,27 +8,11 @@ import (
 )
 
 type BaseHandler struct {
-	logger slog.Logger
+	logger *slog.Logger
 }
 
-func NewBaseHandler(logger slog.Logger) *BaseHandler {
+func NewBaseHandler(logger *slog.Logger) *BaseHandler {
 	return &BaseHandler{logger: logger}
-}
-
-func (b *BaseHandler) handleError(w http.ResponseWriter, r *http.Request, code utils.INT, message utils.TEXT, err error) {
-	if err != nil {
-		b.logger.Error(string(message), "error", err, "code", code, "url", r.URL.Path)
-	} else {
-		b.logger.Error(string(message), "code", code, r.URL.Path)
-	}
-
-	jsonErr := utils.APIError{
-		Code:     code,
-		Message:  message,
-		Resource: utils.TEXT(r.URL.Path),
-	}
-
-	jsonErr.Send(w)
 }
 
 type Handler struct {
@@ -39,12 +23,27 @@ type Handler struct {
 	AggregationHandler *AggregationHandler
 }
 
-func New(service *services.Service, base *BaseHandler) *Handler {
+func New(service *services.Base, base *BaseHandler) *Handler {
 	return &Handler{
-		CustomerHandler:    NewCustomerHandler(services.CustomerService, base),
-		InventoryHandler:   NewInventoryHandler(services.InventoryService, base),
-		MenuHandler:        NewMenuHandler(services.MenuService, base),
-		OrderHandler:       NewOrderHandler(services.OrderService, base),
-		AggregationHandler: NewAggregationHandler(services.AggregationService, base),
+		CustomerHandler:    NewCustomerHandler(service.CustomerService, base),
+		InventoryHandler:   NewInventoryHandler(service.InventoryService, base),
+		MenuHandler:        NewMenuHandler(service.MenuService, base),
+		OrderHandler:       NewOrderHandler(service.OrderService, base),
+		AggregationHandler: NewAggregationHandler(service.AggregationService, base),
 	}
+}
+
+func (b *BaseHandler) handleError(w http.ResponseWriter, r *http.Request, code utils.INT, message utils.TEXT, err error) {
+	if err != nil {
+		b.logger.Error(string(message), "error", err, "code", code, "url", r.URL.Path)
+	} else {
+		b.logger.Error(string(message), "code", code, "url", r.URL.Path)
+	}
+
+	jsonErr := utils.APIError{
+		Code:     code,
+		Message:  message,
+		Resource: utils.TEXT(r.URL.Path),
+	}
+	jsonErr.Send(w)
 }

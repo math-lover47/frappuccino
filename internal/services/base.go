@@ -11,11 +11,11 @@ type Base struct {
 }
 
 func New(repo *repo.Repo) *Base {
-	return &Base{
-		CustomerService:    NewCustomerService(repo.CustomerRepo),
-		InventoryService:   NewInventoryService(repo.InventoryRepo),
-		MenuService:        NewMenuService(repo.MenuRepo),
-		OrderService:       NewOrderService(repo.OrderRepo),
-		AggregationService: NewAggregationService(repo.AggregationRepo),
-	}
+	var service Base
+	service.CustomerService = NewCustomerService(repo.CustomerRepo)
+	service.AggregationService = NewAggregationService(repo.AggregationRepo)
+	service.InventoryService = NewInventoryService(repo.InventoryRepo)
+	service.MenuService = NewMenuService(repo.MenuRepo)
+	service.OrderService = NewOrderService(repo.OrderRepo)
+	return &service
 }

@@ -32,7 +32,7 @@ func (as *AggregationService) GetTotalSales(ctx context.Context) (models.TotalSa
 	return totalSales, nil
 }
 
-func (as *AggregationService) PopularItems(ctx context.Context) (models.PopularItems, error) {
+func (as *AggregationService) GetPopularItems(ctx context.Context) (models.PopularItems, error) {
 	popularItems, err := as.AggregationRepo.GetPopularItems(ctx)
 	if err != nil {
 		return models.PopularItems{}, err

@@ -2,9 +2,9 @@ package main
 
 import (
 	"frappuccino/internal/api"
-	"frappuccino/internal/api/handler"
+	"frappuccino/internal/api/handlers"
 	"frappuccino/internal/repo"
-	"frappuccino/internal/service"
+	"frappuccino/internal/services"
 	"frappuccino/utils"
 	"log"
 	"net/http"
@@ -19,11 +19,11 @@ func main() {
 	logger, logfile := utils.NewLogger()
 	defer logfile.Close()
 
-	baseHandler := handler.NewBaseHandler(*logger)
+	baseHandler := handlers.NewBaseHandler(logger)
 	repos := repo.New(db)
-	services := service.New(repos)
-	handlers := handler.New(services, baseHandler)
+	services := services.New(repos)
+	handlers := handlers.New(services, baseHandler)
 
 	mux := api.Router(handlers)
-	log.Fatalln(http.ListenAndServe(":8080"), mux)
+	log.Fatalln(http.ListenAndServe(":8080", mux))
 }

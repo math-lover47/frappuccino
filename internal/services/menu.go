@@ -2,17 +2,16 @@ package services
 
 import (
 	"context"
-	"fmt"
 	"frappuccino/internal/repo"
 	"frappuccino/models"
 	"log"
 )
 
 type MenuServiceIfc interface {
-	Create(ctx context.Context, item models.MenuItems) (models.MenuItems, error)
+	Create(ctx context.Context, item *models.MenuItems) (*models.MenuItems, error)
 	GetAll(ctx context.Context) ([]models.MenuItems, error)
 	GetByID(ctx context.Context, MenuItemId string) (models.MenuItems, error)
-	UpdateByID(ctx context.Context, item models.MenuItems) error
+	UpdateByID(ctx context.Context, item *models.MenuItems) error
 	DeleteByID(ctx context.Context, MenuItemId string) error
 	GetMenuItemPriceByName(ctx context.Context, name string) (float64, error)
 }
@@ -25,31 +24,11 @@ func NewMenuService(menuRepo repo.MenuRepoIfc) *MenuService {
 	return &MenuService{menuRepo: menuRepo}
 }
 
-// var daoMenu dao.Menu
-// 	daoMenu.Unmarshal(newMenuItem)
-// 	id, err := ms.dataAccess.AddItem(&daoMenu)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	for i := 0; i < len(newMenuItem.Ingredients); i++ {
-// 		var daoIngredient dao.Menu_items_ingredients
-// 		daoIngredient.IngredientName = newMenuItem.Ingredients[i].IngredientsName
-// 		daoIngredient.Quantity = (newMenuItem.Ingredients[i].Quantity)
-// 		err = ms.dataAccess.AddIngredients(&daoIngredient, newMenuItem.ItemName)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	err = ms.dataAccess.AddPriceHistory(id, newMenuItem.Price)
-
-// 	return nil
-
-func (ms *MenuService) Create(ctx context.Context, item models.MenuItems) (models.MenuItems, error) {
+func (ms *MenuService) Create(ctx context.Context, item *models.MenuItems) (*models.MenuItems, error) {
 	log.Println("Creating new menu item:", item.ItemName)
 	created, err := ms.menuRepo.Create(ctx, item)
 	if err != nil {
-		return models.MenuItems{}, err
+		return nil, err
 	}
 	log.Println("Menu item created successfully:", created.MenuItemId)
 	return created, nil
@@ -69,17 +48,17 @@ func (ms *MenuService) GetByID(ctx context.Context, MenuItemId string) (models.M
 	log.Printf("Fetching menu item by ID: %s", MenuItemId)
 	item, err := ms.menuRepo.GetByID(ctx, MenuItemId)
 	if err != nil {
-		return models.MenuItems{}, fmt.Errorf("could not get menu item: %w", err)
+		return models.MenuItems{}, err
 	}
 	log.Printf("Retrieved menu item [%s]: %s", item.MenuItemId, item.ItemName)
 	return item, nil
 }
 
-func (ms *MenuService) UpdateByID(ctx context.Context, item models.MenuItems) error {
+func (ms *MenuService) UpdateByID(ctx context.Context, item *models.MenuItems) error {
 	log.Printf("Updating menu item [%s]", item.MenuItemId)
 	err := ms.menuRepo.UpdateByID(ctx, item)
 	if err != nil {
-		return fmt.Errorf("could not update menu item: %w", err)
+		return err
 	}
 	log.Printf("Menu item [%s] updated successfully", item.MenuItemId)
 	return nil
@@ -89,7 +68,7 @@ func (ms *MenuService) DeleteByID(ctx context.Context, MenuItemId string) error 
 	log.Printf("Deleting menu item [%s]", MenuItemId)
 	err := ms.menuRepo.DeleteByID(ctx, MenuItemId)
 	if err != nil {
-		return fmt.Errorf("could not delete menu item: %w", err)
+		return err
 	}
 	log.Printf("Menu item [%s] deleted successfully", MenuItemId)
 	return nil
