@@ -6,14 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"frappuccino/models"
+	"frappuccino/utils"
 )
 
 type InventoryRepoIfc interface {
-	Create(ctx context.Context, ingredient models.Inventory) (models.Inventory, error)
+	Create(ctx context.Context, Ingredient models.Inventory) (models.Inventory, error)
 	GetAll(ctx context.Context) ([]models.Inventory, error)
-	GetIngredientByID(ctx context.Context, IngredientId string) (models.Inventory, error)
-	UpdateIngredientByID(ctx context.Context, ingredient models.Inventory) error
-	DeleteIngredientByID(ctx context.Context, IngerdientID string) error
+	GetByID(ctx context.Context, IngredientId string) (models.Inventory, error)
+	UpdateByID(ctx context.Context, Ingredient models.Inventory) error
+	DeleteByID(ctx context.Context, IngerdientID string) error
 }
 
 type InventoryRepo struct {
@@ -24,122 +25,129 @@ func NewInventoryRepo(db *sql.DB) *InventoryRepo {
 	return &InventoryRepo{db: db}
 }
 
-func (r *InventoryRepo) Create(ctx context.Context, ingredient models.Inventory) (models.Inventory, error) {
-	var item models.Inventory
-	if ingredient.IngredientName == "" {
-		return models.Inventory{}, errors.New("ingredient_name cannot be empty")
+func (ir *InventoryRepo) Create(ctx context.Context, Ingredient models.Inventory) (models.Inventory, error) {
+	tx, err := ir.db.BeginTx(ctx, nil)
+	if err != nil {
+		return models.Inventory{}, err
 	}
+	defer tx.Rollback()
 
-	err := r.db.QueryRowContext(ctx,
+	err = ir.db.QueryRowContext(ctx,
 		`INSERT INTO inventory (ingredient_name, unit, quantity, reorder_level)
         VALUES ($1, $2, $3, $4)
         RETURNING ingredient_id, created_at, updated_at`,
-		ingredient.IngredientName, ingredient.Unit, ingredient.Quantity, ingredient.ReorderLevel).
-		Scan(&item.IngredientId, &item.CreatedAt, &item.UpdatedAt)
+		Ingredient.IngredientName,
+		Ingredient.Unit,
+		Ingredient.Quantity,
+		Ingredient.ReorderLevel,
+	).Scan(
+		&Ingredient.IngredientId,
+		&Ingredient.CreatedAt,
+		&Ingredient.UpdatedAt,
+	)
 	if err != nil {
 		return models.Inventory{}, err
 	}
 
-	// Заполнение объекта item
-	item.IngredientName = ingredient.IngredientName
-	item.Unit = ingredient.Unit
-	item.Quantity = ingredient.Quantity
-	item.ReorderLevel = ingredient.ReorderLevel
-
-	return item, nil
+	return Ingredient, tx.Commit()
 }
 
-func (r *InventoryRepo) GetAll(ctx context.Context) ([]models.Inventory, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT * FROM inventory`)
+func (ir *InventoryRepo) GetAll(ctx context.Context) ([]models.Inventory, error) {
+	rows, err := ir.db.QueryContext(ctx, `SELECT * FROM inventory`)
 	if err != nil {
-		return nil, fmt.Errorf("failer to query inventory: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
+
 	var inventory []models.Inventory
 	for rows.Next() {
 		var ingredient models.Inventory
 		err := rows.Scan(&ingredient.IngredientId, &ingredient.IngredientName, &ingredient.Unit, &ingredient.Quantity, &ingredient.ReorderLevel, &ingredient.CreatedAt, &ingredient.UpdatedAt)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan ingredient: %w", err)
+			return nil, err
 		}
 		inventory = append(inventory, ingredient)
 	}
 	return inventory, nil
 }
 
-func (r *InventoryRepo) GetIngredientByID(ctx context.Context, IngredientId string) (models.Inventory, error) {
+func (ir *InventoryRepo) GetByID(ctx context.Context, IngredientId string) (models.Inventory, error) {
 	var ingredient models.Inventory
-	err := r.db.QueryRowContext(ctx, `SELECT * FROM inventory WHERE ingredient_id=$1`, IngredientId).Scan(&ingredient.IngredientId, &ingredient.IngredientName, &ingredient.Unit, &ingredient.Quantity, &ingredient.ReorderLevel, &ingredient.CreatedAt, &ingredient.UpdatedAt)
+	err := ir.db.QueryRowContext(ctx, `SELECT * FROM inventory WHERE ingredient_id=$1`, IngredientId).Scan(&ingredient.IngredientId, &ingredient.IngredientName, &ingredient.Unit, &ingredient.Quantity, &ingredient.ReorderLevel, &ingredient.CreatedAt, &ingredient.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return models.Inventory{}, fmt.Errorf("ingredient not found: %w", err)
+			return models.Inventory{}, err
 		}
-		return models.Inventory{}, fmt.Errorf("failed to get ingredient: %w", err)
+		return models.Inventory{}, err
 	}
 
 	return ingredient, nil
 }
 
-func (r *InventoryRepo) UpdateIngredientByID(ctx context.Context, ingredient models.Inventory) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+func (ir *InventoryRepo) UpdateByID(ctx context.Context, ingredient models.Inventory) error {
+	tx, err := ir.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	res, err := tx.ExecContext(ctx, `
-	UPDATE inventory
+	res, err := tx.ExecContext(ctx,
+		`UPDATE inventory
 	SET ingredient_name = $1,
-	unit = $2,
-	quantity= $3,
-	reorder_level =$4,
-	updated_at = NOW()
+		unit = $2,
+		quantity= $3,
+		reorder_level =$4,
+		updated_at = NOW()
 	WHERE ingredient_id =$5
-	`, ingredient.IngredientName, ingredient.Unit, ingredient.Quantity, ingredient.ReorderLevel, ingredient.IngredientId)
+	`,
+		ingredient.IngredientName,
+		ingredient.Unit,
+		ingredient.Quantity,
+		ingredient.ReorderLevel,
+		ingredient.IngredientId,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return utils.ErrIdNotFound
+		} else {
+			return utils.ErrConflictFields
+		}
+		return err
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return utils.ErrIdNotFound
+	}
+
+	return tx.Commit()
+}
+
+func (ir *InventoryRepo) DeleteByID(ctx context.Context, IngerdientID string) error {
+	tx, err := ir.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(ctx,
+		`DELETE FROM inventory WHERE ingredient_id= $1`,
+		IngerdientID,
+	)
 	if err != nil {
 		return err
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
+		return err
 	}
 	if rowsAffected == 0 {
-		return sql.ErrNoRows
+		return utils.ErrIdNotFound
 	}
 
-	// Commit transaction
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
-}
-
-func (r *InventoryRepo) DeleteIngredientByID(ctx context.Context, IngerdientID string) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, `DELETE FROM inventory WHERE ingredient_id= $1`, IngerdientID)
-	if err != nil {
-		return fmt.Errorf("failed to delete ingredient: %w", err)
-	}
-
-	// Verify exactly one row was deleted
-	rowsAffected, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
-	}
-	if rowsAffected == 0 {
-		return sql.ErrNoRows
-	}
-
-	// Commit transaction if everything succeeded
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
+	return tx.Commit()
 }

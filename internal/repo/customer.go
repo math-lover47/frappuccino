@@ -112,8 +112,8 @@ func (cr *CustomerRepo) UpdateById(ctx context.Context, customer models.Customer
 	}
 	defer tx.Rollback()
 
-	res, err := tx.ExecContext(ctx, `
-	UPDATE customers 
+	res, err := tx.ExecContext(ctx,
+		`UPDATE customers 
 	SET 
 		full_name = $1,
 		phone_number =$2,
@@ -165,22 +165,20 @@ func (cr *CustomerRepo) DeleteById(ctx context.Context, CustomerId string) error
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 
 	if rowsAffected == 0 {
-		tx.Rollback()
 		return utils.ErrIdNotFound
 	}
 
 	return tx.Commit()
 }
 
-func (cr *CustomerRepo) GetCustomerIdByNameAndPhone(ctx context.Context, FullName string, PhoneNumber string) (string, error) {
+func (cr *CustomerRepo) GetByFullNameAndPhone(ctx context.Context, FullName string, PhoneNumber string) (string, error) {
 	var CustomerId string
-	err := cr.db.QueryRowContext(ctx, ` 
-	WITH existing AS (
+	err := cr.db.QueryRowContext(ctx,
+		`WITH existing AS (
 	SELECT customer_id FROM customer WHERE full_name = $1 AND phone_number = $2
 	),
 	inserted AS (
