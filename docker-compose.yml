@@ -4,14 +4,15 @@ services:
   app:
     build: .
     ports:
-      - "9090:9090"
+      - "9090:${APP_PORT}"  # Map host 9090 → container 8080
     environment:
       - DB_HOST=db
-      - DB_USER=latte
-      - DB_PASSWORD=latte
-      - DB_NAME=frappuccino
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
       - DB_PORT=5432
-      - DATABASE_URL=postgres://latte:latte@db:5432/frappuccino?sslmode=disable
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      - PORT=${APP_PORT}
     depends_on:
       db:
         condition: service_healthy
@@ -21,14 +22,14 @@ services:
     image: postgres:15
     restart: always
     environment:
-      - POSTGRES_USER=latte
-      - POSTGRES_PASSWORD=latte
-      - POSTGRES_DB=frappuccino
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U latte -d frappuccino"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       retries: 5
       start_period: 10s
@@ -37,8 +38,8 @@ services:
     image: dpage/pgadmin4:latest
     restart: unless-stopped
     environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
-      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
     ports:
       - "8080:80"
     depends_on:
