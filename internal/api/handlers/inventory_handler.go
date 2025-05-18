@@ -2,18 +2,17 @@ package handlers
 
 import (
 	"encoding/json"
+	"frappuccino/internal/services"
+	"frappuccino/models"
 	"log"
 	"net/http"
-
-	"frappuccino/internal/service"
-	"frappuccino/models"
 )
 
 type InventoryHandler struct {
-	inventoryService service.InventoryService // было invenrotyService
+	inventoryService services.InventoryService // было invenrotyService
 }
 
-func NewInventoryHandler(service service.InventoryService) *InventoryHandler {
+func NewInventoryHandler(service services.InventoryService) *InventoryHandler {
 	return &InventoryHandler{inventoryService: service}
 }
 

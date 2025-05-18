@@ -2,18 +2,17 @@ package handlers
 
 import (
 	"encoding/json"
+	"frappuccino/internal/services"
+	"frappuccino/models"
 	"log"
 	"net/http"
-
-	"frappuccino/internal/service"
-	"frappuccino/models"
 )
 
 type MenuHandler struct {
-	menuService service.MenuService
+	menuService services.MenuService
 }
 
-func NewMenuHandler(service service.MenuService) *MenuHandler {
+func NewMenuHandler(service services.MenuService) *MenuHandler {
 	return &MenuHandler{menuService: service}
 }
 

@@ -5,11 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-
 	"frappuccino/models"
 )
 
-type InventoryRepo interface {
+type InventoryRepoIfc interface {
 	Create(ctx context.Context, ingredient models.Inventory) (models.Inventory, error)
 	GetAll(ctx context.Context) ([]models.Inventory, error)
 	GetIngredientByID(ctx context.Context, IngredientId string) (models.Inventory, error)
@@ -17,15 +16,15 @@ type InventoryRepo interface {
 	DeleteIngredientByID(ctx context.Context, IngerdientID string) error
 }
 
-type inventoryRepo struct {
-	*Repository
+type InventoryRepo struct {
+	db *sql.DB
 }
 
-func NewInventoryRepository(db *sql.DB) InventoryRepo {
-	return &inventoryRepo{NewRepository(db)}
+func NewInventoryRepo(db *sql.DB) *InventoryRepo {
+	return &InventoryRepo{db: db}
 }
 
-func (r *inventoryRepo) Create(ctx context.Context, ingredient models.Inventory) (models.Inventory, error) {
+func (r *InventoryRepo) Create(ctx context.Context, ingredient models.Inventory) (models.Inventory, error) {
 	var item models.Inventory
 	if ingredient.IngredientName == "" {
 		return models.Inventory{}, errors.New("ingredient_name cannot be empty")
@@ -50,7 +49,7 @@ func (r *inventoryRepo) Create(ctx context.Context, ingredient models.Inventory)
 	return item, nil
 }
 
-func (r *inventoryRepo) GetAll(ctx context.Context) ([]models.Inventory, error) {
+func (r *InventoryRepo) GetAll(ctx context.Context) ([]models.Inventory, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT * FROM inventory`)
 	if err != nil {
 		return nil, fmt.Errorf("failer to query inventory: %w", err)
@@ -68,7 +67,7 @@ func (r *inventoryRepo) GetAll(ctx context.Context) ([]models.Inventory, error) 
 	return inventory, nil
 }
 
-func (r *inventoryRepo) GetIngredientByID(ctx context.Context, IngredientId string) (models.Inventory, error) {
+func (r *InventoryRepo) GetIngredientByID(ctx context.Context, IngredientId string) (models.Inventory, error) {
 	var ingredient models.Inventory
 	err := r.db.QueryRowContext(ctx, `SELECT * FROM inventory WHERE ingredient_id=$1`, IngredientId).Scan(&ingredient.IngredientId, &ingredient.IngredientName, &ingredient.Unit, &ingredient.Quantity, &ingredient.ReorderLevel, &ingredient.CreatedAt, &ingredient.UpdatedAt)
 	if err != nil {
@@ -81,7 +80,7 @@ func (r *inventoryRepo) GetIngredientByID(ctx context.Context, IngredientId stri
 	return ingredient, nil
 }
 
-func (r *inventoryRepo) UpdateIngredientByID(ctx context.Context, ingredient models.Inventory) error {
+func (r *InventoryRepo) UpdateIngredientByID(ctx context.Context, ingredient models.Inventory) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -117,7 +116,7 @@ func (r *inventoryRepo) UpdateIngredientByID(ctx context.Context, ingredient mod
 	return nil
 }
 
-func (r *inventoryRepo) DeleteIngredientByID(ctx context.Context, IngerdientID string) error {
+func (r *InventoryRepo) DeleteIngredientByID(ctx context.Context, IngerdientID string) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)

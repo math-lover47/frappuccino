@@ -3,11 +3,10 @@ package repo
 import (
 	"context"
 	"database/sql"
-
 	"frappuccino/models"
 )
 
-type OrderRepo interface {
+type OrderRepoIfc interface {
 	Create(ctx context.Context, customer models.Customer) (models.Customer, error)
 	GetAll(ctx context.Context) ([]models.Customer, error)
 	GetItemByID(ctx context.Context, CustomerId string) (models.Customer, error)
@@ -15,10 +14,10 @@ type OrderRepo interface {
 	DeleteItemByID(ctx context.Context, CustomerId string) error
 }
 
-type orderRepo struct {
-	*Repository
+type OrderRepo struct {
+	db *sql.DB
 }
 
-func NewOrderRepository(db *sql.DB) OrderRepo {
-	return &orderRepo{NewRepository(db)}
+func NewOrderRepo(db *sql.DB) *OrderRepo {
+	return &OrderRepo{db: db}
 }

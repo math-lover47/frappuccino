@@ -5,13 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-
 	"frappuccino/models"
 
 	"github.com/lib/pq"
 )
 
-type MenuRepo interface {
+type MenuRepoIfc interface {
 	Create(ctx context.Context, item models.MenuItems) (models.MenuItems, error)
 	GetAll(ctx context.Context) ([]models.MenuItems, error)
 	GetItemByID(ctx context.Context, MenuItemId string) (models.MenuItems, error)
@@ -19,15 +18,15 @@ type MenuRepo interface {
 	DeleteItemByID(ctx context.Context, MenuItemId string) error
 }
 
-type menuRepo struct {
-	*Repository
+type MenuRepo struct {
+	db *sql.DB
 }
 
-func NewMenuRepository(db *sql.DB) MenuRepo {
-	return &menuRepo{NewRepository(db)}
+func NewMenuRepo(db *sql.DB) *MenuRepo {
+	return &MenuRepo{db: db}
 }
 
-func (r *menuRepo) Create(ctx context.Context, item models.MenuItems) (models.MenuItems, error) {
+func (r *MenuRepo) Create(ctx context.Context, item models.MenuItems) (models.MenuItems, error) {
 	err := r.db.QueryRowContext(ctx,
 		`INSERT INTO menu_item (item_name,item_description,price,categories)
 	     VALUES ($1,$2,$3,$4)
@@ -38,7 +37,7 @@ func (r *menuRepo) Create(ctx context.Context, item models.MenuItems) (models.Me
 	return item, nil
 }
 
-func (r *menuRepo) GetAll(ctx context.Context) ([]models.MenuItems, error) {
+func (r *MenuRepo) GetAll(ctx context.Context) ([]models.MenuItems, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT * FROM menu_item`)
 	if err != nil {
@@ -57,7 +56,7 @@ func (r *menuRepo) GetAll(ctx context.Context) ([]models.MenuItems, error) {
 	return menu, nil
 }
 
-func (r *menuRepo) GetItemByID(ctx context.Context, MenuItemId string) (models.MenuItems, error) {
+func (r *MenuRepo) GetItemByID(ctx context.Context, MenuItemId string) (models.MenuItems, error) {
 	var item models.MenuItems
 	err := r.db.QueryRowContext(ctx, `
 		SELECT * FROM menu_item WHERE menu_item_id = $1`, MenuItemId).Scan(&item.MenuItemId, &item.ItemName, &item.ItemDescription, &item.Price, pq.Array(&item.Categories), &item.CreatedAt, &item.UpdatedAt)
@@ -70,7 +69,7 @@ func (r *menuRepo) GetItemByID(ctx context.Context, MenuItemId string) (models.M
 	return item, nil
 }
 
-func (r *menuRepo) UpdateItemByID(ctx context.Context, item models.MenuItems) error {
+func (r *MenuRepo) UpdateItemByID(ctx context.Context, item models.MenuItems) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -105,7 +104,7 @@ func (r *menuRepo) UpdateItemByID(ctx context.Context, item models.MenuItems) er
 	return nil
 }
 
-func (r *menuRepo) DeleteItemByID(ctx context.Context, MenuItemId string) error {
+func (r *MenuRepo) DeleteItemByID(ctx context.Context, MenuItemId string) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)

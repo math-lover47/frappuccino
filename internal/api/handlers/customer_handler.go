@@ -2,18 +2,17 @@ package handlers
 
 import (
 	"encoding/json"
+	"frappuccino/internal/services"
+	"frappuccino/models"
 	"log"
 	"net/http"
-
-	"frappuccino/internal/service"
-	"frappuccino/models"
 )
 
 type CustomerHandler struct {
-	customerService service.CustomerService
+	customerService services.CustomerService
 }
 
-func NewCustomerHandler(service service.CustomerService) *CustomerHandler {
+func NewCustomerHandler(service services.CustomerService) *CustomerHandler {
 	return &CustomerHandler{customerService: service}
 }
 
