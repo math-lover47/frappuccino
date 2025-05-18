@@ -20,8 +20,27 @@ type MenuItemsIngredients struct {
 	Quantity             utils.DEC  `json:"quantity"`
 }
 
-// func (m *Menu) Marshal(dtoMenu *dto.Menu) {
-// }
+type Ingredients struct {
+	IngredientName string  `json:"ingredient_name"`
+	Quantity       float64 `json:"quantity"`
+}
 
-// func (m *Menu) Unmarshal(dtoMenu *dto.Menu) {
-// }
+func (m *MenuItems) Marshal(menu *MenuItems) {
+	menu.MenuItemId = m.MenuItemId
+	menu.ItemName = m.ItemName
+	menu.ItemDescription = m.ItemDescription
+	menu.Price = m.Price
+	menu.Categories = m.Categories
+	menu.CreatedAt = m.CreatedAt
+	menu.UpdatedAt = m.UpdatedAt
+}
+
+func (m *MenuItems) Unmarshal(menu *MenuItems) {
+	m.MenuItemId = menu.MenuItemId
+	m.ItemName = menu.ItemName
+	m.ItemDescription = menu.ItemDescription
+	m.Price = menu.Price
+	m.Categories = menu.Categories
+	m.CreatedAt = menu.CreatedAt
+	m.UpdatedAt = menu.UpdatedAt
+}

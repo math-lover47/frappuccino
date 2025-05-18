@@ -4,18 +4,22 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"frappuccino/models"
+	"frappuccino/utils"
 
 	"github.com/lib/pq"
 )
 
 type MenuRepoIfc interface {
-	Create(ctx context.Context, item models.MenuItems) (models.MenuItems, error)
+	Create(ctx context.Context, menuItem models.MenuItems) (models.MenuItems, error)
 	GetAll(ctx context.Context) ([]models.MenuItems, error)
-	GetItemByID(ctx context.Context, MenuItemId string) (models.MenuItems, error)
-	UpdateItemByID(ctx context.Context, item models.MenuItems) error
-	DeleteItemByID(ctx context.Context, MenuItemId string) error
+	GetByID(ctx context.Context, menuItemId string) (models.MenuItems, error)
+	UpdateByID(ctx context.Context, menuItem models.MenuItems) error
+	DeleteByID(ctx context.Context, menuItemId string) error
+
+	CreatePriceHistory(ctx context.Context, menuItemId string, Price float64) error
+	CreateIngredient(ctx context.Context, Ingredient *models.MenuItemsIngredients, menuItemName string) error
+	GetMenuItemPriceByName(ctx context.Context, menuItemName string) (float64, error)
 }
 
 type MenuRepo struct {
@@ -26,108 +30,205 @@ func NewMenuRepo(db *sql.DB) *MenuRepo {
 	return &MenuRepo{db: db}
 }
 
-func (r *MenuRepo) Create(ctx context.Context, item models.MenuItems) (models.MenuItems, error) {
-	err := r.db.QueryRowContext(ctx,
-		`INSERT INTO menu_item (item_name,item_description,price,categories)
-	     VALUES ($1,$2,$3,$4)
-		 RETURNING menu_item_id,created_at,updated_at`, item.ItemName, item.ItemDescription, item.Price, pq.Array(item.Categories)).Scan(&item.MenuItemId, &item.CreatedAt, &item.UpdatedAt)
+func (mr *MenuRepo) Create(ctx context.Context, menuItem models.MenuItems) (models.MenuItems, error) {
+	tx, err := mr.db.BeginTx(ctx, nil)
 	if err != nil {
-		return models.MenuItems{}, fmt.Errorf("failed to create menu item: %w", err)
+		return models.MenuItems{}, err
 	}
-	return item, nil
+	defer tx.Rollback()
+
+	err = mr.db.QueryRowContext(ctx,
+		`INSERT INTO menu_items (item_name,item_description,price,categories)
+	     VALUES ($1,$2,$3,$4)
+		 RETURNING menu_item_id,created_at,updated_at`,
+		menuItem.ItemName,
+		menuItem.ItemDescription,
+		menuItem.Price,
+		pq.Array(menuItem.Categories),
+	).Scan(
+		&menuItem.MenuItemId,
+		&menuItem.CreatedAt,
+		&menuItem.UpdatedAt,
+	)
+
+	if err != nil {
+		return models.MenuItems{}, err
+	}
+
+	return menuItem, tx.Commit()
 }
 
-func (r *MenuRepo) GetAll(ctx context.Context) ([]models.MenuItems, error) {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT * FROM menu_item`)
+func (mr *MenuRepo) GetAll(ctx context.Context) ([]models.MenuItems, error) {
+	rows, err := mr.db.QueryContext(ctx, `SELECT * FROM menu_items`)
 	if err != nil {
-		return nil, fmt.Errorf("failer to query Menu: %w", err)
+		return nil, err
 	}
 	defer rows.Close()
+
 	var menu []models.MenuItems
 	for rows.Next() {
-		var item models.MenuItems
-		err := rows.Scan(&item.MenuItemId, &item.ItemName, &item.ItemDescription, &item.Price, pq.Array(&item.Categories), &item.CreatedAt, &item.UpdatedAt)
+		var menuItem models.MenuItems
+		err := rows.Scan(
+			&menuItem.MenuItemId,
+			&menuItem.ItemName,
+			&menuItem.ItemDescription,
+			&menuItem.Price,
+			pq.Array(&menuItem.Categories),
+			&menuItem.CreatedAt,
+			&menuItem.UpdatedAt,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan Menu: %w", err)
+			return nil, err
 		}
-		menu = append(menu, item)
+		menu = append(menu, menuItem)
 	}
+
 	return menu, nil
 }
 
-func (r *MenuRepo) GetItemByID(ctx context.Context, MenuItemId string) (models.MenuItems, error) {
-	var item models.MenuItems
-	err := r.db.QueryRowContext(ctx, `
-		SELECT * FROM menu_item WHERE menu_item_id = $1`, MenuItemId).Scan(&item.MenuItemId, &item.ItemName, &item.ItemDescription, &item.Price, pq.Array(&item.Categories), &item.CreatedAt, &item.UpdatedAt)
+func (mr *MenuRepo) GetByID(ctx context.Context, menuItemId string) (models.MenuItems, error) {
+	var menuItem models.MenuItems
+	err := mr.db.QueryRowContext(ctx,
+		`SELECT * FROM menu_items WHERE menu_item_id = $1`,
+		menuItemId,
+	).Scan(
+		&menuItem.MenuItemId,
+		&menuItem.ItemName,
+		&menuItem.ItemDescription,
+		&menuItem.Price,
+		pq.Array(&menuItem.Categories),
+		&menuItem.CreatedAt,
+		&menuItem.UpdatedAt,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return models.MenuItems{}, fmt.Errorf("Item not found: %w", err)
+			return models.MenuItems{}, utils.ErrIdNotFound
 		}
-		return models.MenuItems{}, fmt.Errorf("failed to get Item: %w", err)
+		return models.MenuItems{}, err
 	}
-	return item, nil
+	return menuItem, nil
 }
 
-func (r *MenuRepo) UpdateItemByID(ctx context.Context, item models.MenuItems) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+func (mr *MenuRepo) UpdateByID(ctx context.Context, menuItem models.MenuItems) error {
+	tx, err := mr.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return err
 	}
 	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, `
-	UPDATE menu_item 
-	SET 
-		item_name = $1,
-		item_description =$2,
-		price =$3,
-		categories =$4,
-		updated_at = NOW()
-	WHERE menu_item_id = $5
-	`, item.ItemName, item.ItemDescription, item.Price, item.Categories, item.MenuItemId)
+
+	res, err := tx.ExecContext(ctx,
+		`UPDATE menu_items
+		SET 
+			item_name = $1,
+			item_description =$2,
+			price =$3,
+			categories =$4,
+			updated_at = NOW()
+		WHERE menu_item_id = $5
+	`,
+		menuItem.ItemName,
+		menuItem.ItemDescription,
+		menuItem.Price,
+		menuItem.Categories,
+		menuItem.MenuItemId,
+	)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return utils.ErrIdNotFound
+		} else {
+			return utils.ErrConflictFields
+		}
 		return err
 	}
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
+		return err
 	}
 	if rowsAffected == 0 {
-		return sql.ErrNoRows
+		return utils.ErrIdNotFound
 	}
 
-	// Commit transaction
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
+	return tx.Commit()
 }
 
-func (r *MenuRepo) DeleteItemByID(ctx context.Context, MenuItemId string) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+func (mr *MenuRepo) DeleteByID(ctx context.Context, menuItemId string) error {
+	tx, err := mr.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return err
 	}
 	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, `DELETE FROM menu_item_id WHERE id= $1`, MenuItemId)
+
+	res, err := tx.ExecContext(ctx, `DELETE FROM menu_item_id WHERE id= $1`, menuItemId)
 	if err != nil {
-		return fmt.Errorf("failed to delete MenuItems: %w", err)
+		return err
 	}
 
-	// Verify exactly one row was deleted
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
+		return err
 	}
+
 	if rowsAffected == 0 {
-		return sql.ErrNoRows
+		return utils.ErrIdNotFound
 	}
 
-	// Commit transaction if everything succeeded
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+	return tx.Commit()
+}
+
+func (mr *MenuRepo) CreatePriceHistory(ctx context.Context, menuItemId string, price float64) error {
+	tx, err := mr.db.Begin()
+
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO price_history (menu_item_id, price)
+			VALUES ($1, $2)`,
+		menuItemId,
+		price,
+	)
+
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (mr *MenuRepo) CreateIngredient(ctx context.Context, ingredient *models.MenuItemsIngredients, menuItemName string) error {
+	tx, err := mr.db.Begin()
+	if err != nil {
+		return err
 	}
 
-	return nil
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO menu_item_ingredients(menu_item_id, ingredient_id, ingredient_name,quantity)
+        VALUES(
+			(SELECT menu_item_id FROM menu_items WHERE item_name = $1), 
+			(SELECT ingredient_id FROM inventory WHERE ingredient_name = $2), 
+			$3, 
+			$4
+		);`,
+		menuItemName,
+		ingredient.IngredientName,
+		ingredient.IngredientName,
+		ingredient.Quantity,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (mr *MenuRepo) GetMenuItemPriceByName(ctx context.Context, menuItemName string) (float64, error) {
+	var menuItemPrice float64
+
+	err := mr.db.QueryRowContext(ctx, `SELECT price FROM menu_items WHERE item_name=$1`,
+		menuItemName,
+	).Scan(
+		&menuItemPrice,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return menuItemPrice, nil
 }

@@ -46,3 +46,8 @@ type OrderStatusHistory struct {
 	OrderStatus          utils.TEXT `json:"order_status"`
 	UpdatedAt            utils.TIME `json:"updated_at"`
 }
+
+type OrderedItem struct {
+	Name  string
+	Count int
+}

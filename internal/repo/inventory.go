@@ -10,11 +10,13 @@ import (
 )
 
 type InventoryRepoIfc interface {
-	Create(ctx context.Context, Ingredient models.Inventory) (models.Inventory, error)
+	Create(ctx context.Context, ingredient models.Inventory) (models.Inventory, error)
 	GetAll(ctx context.Context) ([]models.Inventory, error)
-	GetByID(ctx context.Context, IngredientId string) (models.Inventory, error)
-	UpdateByID(ctx context.Context, Ingredient models.Inventory) error
-	DeleteByID(ctx context.Context, IngerdientID string) error
+	GetByID(ctx context.Context, ingredientId string) (models.Inventory, error)
+	UpdateByID(ctx context.Context, ingredient models.Inventory) error
+	DeleteByID(ctx context.Context, ingerdientID string) error
+	CreateTransaction(ctx context.Context, inventoryItem *models.Inventory, status string) error
+	GetLeftOvers(ctx context.Context, pagenum int, pagesize int) (models.Page, error)
 }
 
 type InventoryRepo struct {
@@ -25,7 +27,7 @@ func NewInventoryRepo(db *sql.DB) *InventoryRepo {
 	return &InventoryRepo{db: db}
 }
 
-func (ir *InventoryRepo) Create(ctx context.Context, Ingredient models.Inventory) (models.Inventory, error) {
+func (ir *InventoryRepo) Create(ctx context.Context, ingredient models.Inventory) (models.Inventory, error) {
 	tx, err := ir.db.BeginTx(ctx, nil)
 	if err != nil {
 		return models.Inventory{}, err
@@ -36,20 +38,20 @@ func (ir *InventoryRepo) Create(ctx context.Context, Ingredient models.Inventory
 		`INSERT INTO inventory (ingredient_name, unit, quantity, reorder_level)
         VALUES ($1, $2, $3, $4)
         RETURNING ingredient_id, created_at, updated_at`,
-		Ingredient.IngredientName,
-		Ingredient.Unit,
-		Ingredient.Quantity,
-		Ingredient.ReorderLevel,
+		ingredient.IngredientName,
+		ingredient.Unit,
+		ingredient.Quantity,
+		ingredient.ReorderLevel,
 	).Scan(
-		&Ingredient.IngredientId,
-		&Ingredient.CreatedAt,
-		&Ingredient.UpdatedAt,
+		&ingredient.IngredientId,
+		&ingredient.CreatedAt,
+		&ingredient.UpdatedAt,
 	)
 	if err != nil {
 		return models.Inventory{}, err
 	}
 
-	return Ingredient, tx.Commit()
+	return ingredient, tx.Commit()
 }
 
 func (ir *InventoryRepo) GetAll(ctx context.Context) ([]models.Inventory, error) {
@@ -71,9 +73,9 @@ func (ir *InventoryRepo) GetAll(ctx context.Context) ([]models.Inventory, error)
 	return inventory, nil
 }
 
-func (ir *InventoryRepo) GetByID(ctx context.Context, IngredientId string) (models.Inventory, error) {
+func (ir *InventoryRepo) GetByID(ctx context.Context, ingredientId string) (models.Inventory, error) {
 	var ingredient models.Inventory
-	err := ir.db.QueryRowContext(ctx, `SELECT * FROM inventory WHERE ingredient_id=$1`, IngredientId).Scan(&ingredient.IngredientId, &ingredient.IngredientName, &ingredient.Unit, &ingredient.Quantity, &ingredient.ReorderLevel, &ingredient.CreatedAt, &ingredient.UpdatedAt)
+	err := ir.db.QueryRowContext(ctx, `SELECT * FROM inventory WHERE ingredient_id=$1`, ingredientId).Scan(&ingredient.IngredientId, &ingredient.IngredientName, &ingredient.Unit, &ingredient.Quantity, &ingredient.ReorderLevel, &ingredient.CreatedAt, &ingredient.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.Inventory{}, err
@@ -97,7 +99,6 @@ func (ir *InventoryRepo) UpdateByID(ctx context.Context, ingredient models.Inven
 		unit = $2,
 		quantity= $3,
 		reorder_level =$4,
-		updated_at = NOW()
 	WHERE ingredient_id =$5
 	`,
 		ingredient.IngredientName,
@@ -126,16 +127,16 @@ func (ir *InventoryRepo) UpdateByID(ctx context.Context, ingredient models.Inven
 	return tx.Commit()
 }
 
-func (ir *InventoryRepo) DeleteByID(ctx context.Context, IngerdientID string) error {
+func (ir *InventoryRepo) DeleteByID(ctx context.Context, ingerdientID string) error {
 	tx, err := ir.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return err
 	}
 	defer tx.Rollback()
 
 	res, err := tx.ExecContext(ctx,
 		`DELETE FROM inventory WHERE ingredient_id= $1`,
-		IngerdientID,
+		ingerdientID,
 	)
 	if err != nil {
 		return err
@@ -150,4 +151,69 @@ func (ir *InventoryRepo) DeleteByID(ctx context.Context, IngerdientID string) er
 	}
 
 	return tx.Commit()
+}
+
+func (ir *InventoryRepo) CreateTransaction(ctx context.Context, inventoryItem *models.Inventory, status string) error {
+	tx, err := ir.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO inventory_transactions (ingredient_id, quantity, inventory_transaction_action)
+        VALUES($1, $2, $3)`,
+		inventoryItem.IngredientId,
+		inventoryItem.Quantity,
+		status,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (ir *InventoryRepo) GetLeftOvers(ctx context.Context, pagenum int, pagesize int) (models.Page, error) {
+	rows, err := ir.db.QueryContext(ctx,
+		`WITH total AS (
+		SELECT COUNT(*) AS total_count FROM inventory
+		)
+		SELECT 
+			i.ingredient_name, i.quantity, total.total_count
+		FROM inventory i, total
+		ORDER BY i.quantity DESC
+		LIMIT $1 OFFSET $2;
+	`,
+		pagesize,
+		(pagenum-1)*pagesize,
+	)
+	if err != nil {
+		return models.Page{}, err
+	}
+	defer rows.Close()
+
+	var leftovers []models.Data
+	var totalCount int
+
+	for rows.Next() {
+		var item models.Data
+		if err := rows.Scan(&item.Name, &item.Quantity, &totalCount); err != nil {
+			return models.Page{}, err
+		}
+		leftovers = append(leftovers, item)
+	}
+
+	totalpages := (totalCount + pagesize - 1) / pagesize
+
+	response := models.Page{
+		CurrentPage: pagenum,
+		HasNextPage: pagenum < totalpages,
+		PageSize:    pagesize,
+		TotalPages:  totalpages,
+		Data:        leftovers,
+	}
+
+	return response, nil
 }

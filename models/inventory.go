@@ -14,10 +14,21 @@ type Inventory struct {
 
 type InventoryTransactions struct {
 	InventoryTransactionId     utils.TEXT `json:"inventory_transaction_id"`
-	ReferenceId                utils.TEXT `json:"reference_id"`
 	IngredientId               utils.TEXT `json:"ingredient_id"`
-	Notes                      utils.TEXT `json:"notes"`
 	InventoryTransactionAction utils.TEXT `json:"inventory_transaction_action"`
 	Quantity                   utils.DEC  `json:"quantity"`
 	CreatedAt                  utils.TIME `json:"created_at"`
+}
+
+type Page struct {
+	CurrentPage int  `json:"current_page"`
+	HasNextPage bool `json:"has_next_page"`
+	PageSize    int  `json:"page_size"`
+	TotalPages  int  `json:"total_pages"`
+	Data        []Data
+}
+
+type Data struct {
+	Name     string  `json:"name"`
+	Quantity float64 `json:"quantity"`
 }

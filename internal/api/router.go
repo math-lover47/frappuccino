@@ -10,25 +10,25 @@ func Router(handlers *handlers.Handler) *http.ServeMux {
 
 	mux.HandleFunc("POST /customer", handlers.CustomerHandler.POST)
 	mux.HandleFunc("GET /customer", handlers.CustomerHandler.GET)
-	mux.HandleFunc("GET /customer/{id}", handlers.CustomerHandler.GETBYID)
+	mux.HandleFunc("GET /customer/{id}", handlers.CustomerHandler.GETById)
 	mux.HandleFunc("PUT /customer/{id}", handlers.CustomerHandler.PUT)
 	mux.HandleFunc("DELETE /customer/{id}", handlers.CustomerHandler.DELETE)
 
 	mux.HandleFunc("POST /inventory", handlers.InventoryHandler.POST)
 	mux.HandleFunc("GET /inventory", handlers.InventoryHandler.GET)
-	mux.HandleFunc("GET /inventory/{id}", handlers.InventoryHandler.GETBYID)
+	mux.HandleFunc("GET /inventory/{id}", handlers.InventoryHandler.GETById)
 	mux.HandleFunc("PUT /inventory/{id}", handlers.InventoryHandler.PUT)
 	mux.HandleFunc("DELETE /inventory/{id}", handlers.InventoryHandler.DELETE)
 
 	mux.HandleFunc("POST /menu", handlers.MenuHandler.POST)
 	mux.HandleFunc("GET /menu", handlers.MenuHandler.GET)
-	mux.HandleFunc("GET /menu/{id}", handlers.MenuHandler.GETBYID)
+	mux.HandleFunc("GET /menu/{id}", handlers.MenuHandler.GETById)
 	mux.HandleFunc("PUT /menu/{id}", handlers.MenuHandler.PUT)
 	mux.HandleFunc("DELETE /menu/{id}", handlers.MenuHandler.DELETE)
 
 	mux.HandleFunc("POST /order", handlers.OrderHandler.POST)
 	mux.HandleFunc("GET /order", handlers.OrderHandler.GET)
-	mux.HandleFunc("GET /order/{id}", handlers.OrderHandler.GETBYID)
+	mux.HandleFunc("GET /order/{id}", handlers.OrderHandler.GETById)
 	mux.HandleFunc("PUT /order/{id}", handlers.OrderHandler.PUT)
 	mux.HandleFunc("DELETE /order/{id}", handlers.OrderHandler.DELETE)
 

@@ -9,12 +9,12 @@ import (
 )
 
 type CustomerRepoIfc interface {
-	Create(ctx context.Context, Customer models.Customer) (models.Customer, error)
+	Create(ctx context.Context, customer models.Customer) (models.Customer, error)
 	GetAll(ctx context.Context) ([]models.Customer, error)
-	GetByID(ctx context.Context, CustomerId string) (models.Customer, error)
-	UpdateById(ctx context.Context, Customer models.Customer) error
-	DeleteById(ctx context.Context, CustomerId string) error
-	GetByFullNameAndPhone(ctx context.Context, FullName string, PhoneNumber string) (string, error)
+	GetByID(ctx context.Context, customerId string) (models.Customer, error)
+	UpdateById(ctx context.Context, customer models.Customer) error
+	DeleteById(ctx context.Context, customerId string) error
+	GetByFullNameAndPhone(ctx context.Context, fullname string, phonenumber string) (string, error)
 }
 
 type CustomerRepo struct {
@@ -25,7 +25,7 @@ func NewCustomerRepo(db *sql.DB) *CustomerRepo {
 	return &CustomerRepo{db: db}
 }
 
-func (cr *CustomerRepo) Create(ctx context.Context, Customer models.Customer) (models.Customer, error) {
+func (cr *CustomerRepo) Create(ctx context.Context, customer models.Customer) (models.Customer, error) {
 	tx, err := cr.db.BeginTx(ctx, nil)
 	if err != nil {
 		return models.Customer{}, err
@@ -36,26 +36,25 @@ func (cr *CustomerRepo) Create(ctx context.Context, Customer models.Customer) (m
 		`INSERT INTO customers (full_name,phone_number,email,preferences)
 	     VALUES ($1,$2,$3,$4)
 		 RETURNING customer_id,created_at,updateByIdd_at`,
-		Customer.FullName,
-		Customer.PhoneNumber,
-		Customer.Email,
-		Customer.Preferences,
+		customer.FullName,
+		customer.PhoneNumber,
+		customer.Email,
+		customer.Preferences,
 	).Scan(
-		&Customer.CustomerId,
-		&Customer.CreatedAt,
-		&Customer.UpdatedAt,
+		&customer.CustomerId,
+		&customer.CreatedAt,
+		&customer.UpdatedAt,
 	)
 
 	if err != nil {
 		return models.Customer{}, err
 	}
 
-	return Customer, tx.Commit()
+	return customer, tx.Commit()
 }
 
 func (cr *CustomerRepo) GetAll(ctx context.Context) ([]models.Customer, error) {
-	rows, err := cr.db.QueryContext(ctx, `
-		SELECT * FROM customers`)
+	rows, err := cr.db.QueryContext(ctx, `SELECT * FROM customers`)
 	if err != nil {
 		return nil, err
 	}
@@ -82,11 +81,11 @@ func (cr *CustomerRepo) GetAll(ctx context.Context) ([]models.Customer, error) {
 	return allcustomers, nil
 }
 
-func (cr *CustomerRepo) GetByID(ctx context.Context, CustomerId string) (models.Customer, error) {
+func (cr *CustomerRepo) GetByID(ctx context.Context, customerId string) (models.Customer, error) {
 	var customer models.Customer
-	err := cr.db.QueryRowContext(ctx, `
-		SELECT * FROM customers WHERE customer_id = $1`,
-		CustomerId,
+	err := cr.db.QueryRowContext(ctx,
+		`SELECT * FROM customers WHERE customer_id = $1`,
+		customerId,
 	).Scan(
 		&customer.CustomerId,
 		&customer.FullName,
@@ -114,14 +113,14 @@ func (cr *CustomerRepo) UpdateById(ctx context.Context, customer models.Customer
 
 	res, err := tx.ExecContext(ctx,
 		`UPDATE customers 
-	SET 
-		full_name = $1,
-		phone_number =$2,
-		email =$3,
-		preferences =$4,
-		updateByIdd_at = NOW()
-	WHERE customer_id = $5
-	`,
+			SET 
+				full_name = $1,
+				phone_number =$2,
+				email =$3,
+				preferences =$4,
+				updateByIdd_at = NOW()
+			WHERE customer_id = $5
+		`,
 		customer.FullName,
 		customer.PhoneNumber,
 		customer.Email,
@@ -148,17 +147,14 @@ func (cr *CustomerRepo) UpdateById(ctx context.Context, customer models.Customer
 	return tx.Commit()
 }
 
-func (cr *CustomerRepo) DeleteById(ctx context.Context, CustomerId string) error {
+func (cr *CustomerRepo) DeleteById(ctx context.Context, customerId string) error {
 	tx, err := cr.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	res, err := tx.ExecContext(ctx,
-		`DELETE FROM customer_id WHERE id= $1`,
-		CustomerId,
-	)
+	res, err := tx.ExecContext(ctx, `DELETE FROM customer_id WHERE id= $1`, customerId)
 	if err != nil {
 		return err
 	}
@@ -175,24 +171,26 @@ func (cr *CustomerRepo) DeleteById(ctx context.Context, CustomerId string) error
 	return tx.Commit()
 }
 
-func (cr *CustomerRepo) GetByFullNameAndPhone(ctx context.Context, FullName string, PhoneNumber string) (string, error) {
+func (cr *CustomerRepo) GetByFullNameAndPhone(ctx context.Context, fullname string, phonenumber string) (string, error) {
 	var CustomerId string
 	err := cr.db.QueryRowContext(ctx,
 		`WITH existing AS (
-	SELECT customer_id FROM customer WHERE full_name = $1 AND phone_number = $2
-	),
-	inserted AS (
-	INSERT INTO customer (full_name, phone_number)
-	SELECT $1, $2
-	WHERE NOT EXISTS (SELECT 1 FROM existing)
-	RETURNING customer_id
-	)
-	SELECT customer_id FROM inserted
-	UNION ALL
-	SELECT customer_id FROM existing;
+		SELECT customer_id 
+		FROM customer 
+		WHERE full_name = $1 AND phone_number = $2
+		),
+		inserted AS (
+		INSERT INTO customer (full_name, phone_number)
+		SELECT $1, $2
+		WHERE NOT EXISTS (SELECT 1 FROM existing)
+		RETURNING customer_id
+		)
+		SELECT customer_id FROM inserted
+		UNION ALL
+		SELECT customer_id FROM existing;
 	`,
-		FullName,
-		PhoneNumber).Scan(
+		fullname,
+		phonenumber).Scan(
 		&CustomerId,
 	)
 	if err != nil {

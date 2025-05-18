@@ -9,9 +9,9 @@ import (
 type OrderRepoIfc interface {
 	Create(ctx context.Context, customer models.Customer) (models.Customer, error)
 	GetAll(ctx context.Context) ([]models.Customer, error)
-	GetItemByID(ctx context.Context, CustomerId string) (models.Customer, error)
+	GetItemByID(ctx context.Context, customerId string) (models.Customer, error)
 	UpdateItemByID(ctx context.Context, customer models.Customer) error
-	DeleteItemByID(ctx context.Context, CustomerId string) error
+	DeleteItemByID(ctx context.Context, customerId string) error
 }
 
 type OrderRepo struct {
